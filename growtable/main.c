@@ -1,0 +1,130 @@
+/*
+ * GrowTable.cpp
+ *
+ * Created: 2018-04-09 20:34:28
+ * Author : Linus Törngren
+ */ 
+
+#define F_CPU 20000000L  // 20 MHz
+
+#include <avr/io.h>
+#include <avr/interrupt.h>
+#include "buffer.h"
+
+#define USART_BAUDRATE 250000
+#define USART_BAUD_PRESCALE ((F_CPU / (USART_BAUDRATE * 16UL))) - 1
+
+buffer_t buffer_tx;
+buffer_t buffer_rx;
+
+ISR(USART_RX_vect) {
+	uint8_t data;
+	data = UDR0;
+	if (!buffer_isFull(&buffer_rx))
+		buffer_write(&buffer_rx, data);
+	
+/*	uint8_t temp;
+	temp = UDR0;
+	if (temp == 'a') {
+		UDR0 = 'x';
+		PORTB |= (1<<PB0);
+	}
+	else if (temp == 'A') {
+		UDR0 = 'X';
+		PORTB &= ~(1<<PB0);
+	}
+	else if (temp == 'b') {
+		UDR0 = 'y';
+		PORTB |= (1<<PB1);
+	}
+	else if (temp == 'B') {
+		UDR0 = 'Y';
+		PORTB &= ~(1<<PB1);
+	}
+	else if (temp == 'c') {
+		UDR0 = 'z';
+		PORTB |= (1<<PB2);
+	}
+	else if (temp == 'C') {
+		UDR0 = 'Z';
+		PORTB &= ~(1<<PB2);
+	}
+	else if (temp == 'd') {
+		UDR0 = 'w';
+		PORTC = (1<<PC0);
+	} */
+}
+
+ISR(USART_TX_vect) {
+	uint8_t data;
+	if (buffer_getCount(&buffer_tx) > 0) {
+		data = buffer_read(&buffer_tx);
+		UDR0 = data;
+	}
+}
+
+void init_USART(void) {
+	buffer_initBuffer(&buffer_tx);
+	buffer_initBuffer(&buffer_rx);
+	
+	UBRR0H = USART_BAUD_PRESCALE >> 8;
+	UBRR0L = USART_BAUD_PRESCALE;
+	
+	UCSR0B = (1 << TXEN0) | (1 << RXEN0) | (1 << RXCIE0);
+}
+
+void init_PORTS(void) {
+	// PB7:	XTAL2
+	// PB6: XTAL1
+	// PB5: SCK
+	// PB4: MISO
+	// PB3: MOSI
+	// PB2: Light1
+	// PB1: Heat2
+	// PB0: Heat1
+	DDRB  = 0b00000111;
+	PORTB = 0b11111000;
+	
+	// PC7:	N/A
+	// PC6: Reset
+	// PC5: RTC (SCL)
+	// PC4: RTC (SDA)
+	// PC3: USB sleep
+	// PC2: Dallas 1-wire input
+	// PC1: Dallas 1-wire output
+	// PC0: Fan A power
+	DDRC  = 0b00001011;
+	PORTC = 0b00110000;
+	
+	// PD7: Fan B power
+	// PD6: Fan A PWM
+	// PD5: Fan B PWM
+	// PD4: Fan A tach
+	// PD3: Fan B tach
+	// PD2: RTC interrupt
+	// PD1: USB Tx
+	// PD0: USB Rx
+	DDRD  = 0b11100000;
+	PORTD = 0b00011111;
+}
+
+int main(void) {
+	uint8_t temp;
+	
+	init_PORTS();
+	init_USART();
+	sei();
+	
+	buffer_write(&buffer_tx, 0x48);
+	buffer_write(&buffer_tx, 0x65);
+	buffer_write(&buffer_tx, 0x6c);
+	buffer_write(&buffer_tx, 0x6c);
+	buffer_write(&buffer_tx, 0x6f);
+	
+	UDR0 = 0x30;
+	
+    while (1) {
+
+    }
+}
+
