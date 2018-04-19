@@ -14,15 +14,16 @@
 #define USART_BAUDRATE 250000
 #define USART_BAUD_PRESCALE ((F_CPU / (USART_BAUDRATE * 16UL))) - 1
 
-buffer_t buffer_tx;
-buffer_t buffer_rx;
+buffer_t volatile buffer_tx;
+buffer_t volatile buffer_rx;
 
 ISR(USART_RX_vect) {
 	uint8_t data;
 	data = UDR0;
-	if (!buffer_isFull(&buffer_rx))
+	if (buffer_isFull(&buffer_rx) == false) {
 		buffer_write(&buffer_rx, data);
-	
+		PORTB |= (1<<PB0);
+	}
 /*	uint8_t temp;
 	temp = UDR0;
 	if (temp == 'a') {
@@ -55,7 +56,7 @@ ISR(USART_RX_vect) {
 	} */
 }
 
-ISR(USART_TX_vect) {
+ISR(USART_UDRE_vect) {
 	uint8_t data;
 	if (buffer_getCount(&buffer_tx) > 0) {
 		data = buffer_read(&buffer_tx);
