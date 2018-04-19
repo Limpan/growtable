@@ -3,7 +3,7 @@
  *
  * Created: 2018-04-09 20:34:28
  * Author : Linus Törngren
- */ 
+ */
 
 #define F_CPU 20000000L  // 20 MHz
 
@@ -22,6 +22,7 @@ ISR(USART_RX_vect) {
 	data = UDR0;
 	if (buffer_isFull(&buffer_rx) == false) {
 		buffer_write(&buffer_rx, data);
+
 		PORTB |= (1<<PB0);
 	}
 /*	uint8_t temp;
@@ -61,16 +62,19 @@ ISR(USART_UDRE_vect) {
 	if (buffer_getCount(&buffer_tx) > 0) {
 		data = buffer_read(&buffer_tx);
 		UDR0 = data;
+	} else {
+		// Clear UDRIE (disable UDRE)
+		UCSR0B &= ~(1 << UDRIE);
 	}
 }
 
 void init_USART(void) {
 	buffer_initBuffer(&buffer_tx);
 	buffer_initBuffer(&buffer_rx);
-	
+
 	UBRR0H = USART_BAUD_PRESCALE >> 8;
 	UBRR0L = USART_BAUD_PRESCALE;
-	
+
 	UCSR0B = (1 << TXEN0) | (1 << RXEN0) | (1 << RXCIE0);
 }
 
@@ -85,7 +89,7 @@ void init_PORTS(void) {
 	// PB0: Heat1
 	DDRB  = 0b00000111;
 	PORTB = 0b11111000;
-	
+
 	// PC7:	N/A
 	// PC6: Reset
 	// PC5: RTC (SCL)
@@ -96,7 +100,7 @@ void init_PORTS(void) {
 	// PC0: Fan A power
 	DDRC  = 0b00001011;
 	PORTC = 0b00110000;
-	
+
 	// PD7: Fan B power
 	// PD6: Fan A PWM
 	// PD5: Fan B PWM
@@ -109,23 +113,28 @@ void init_PORTS(void) {
 	PORTD = 0b00011111;
 }
 
-int main(void) {
-	uint8_t temp;
-	
-	init_PORTS();
-	init_USART();
-	sei();
-	
+void transmit_Data(void) {
+	// Add data to buffer_tx
 	buffer_write(&buffer_tx, 0x48);
 	buffer_write(&buffer_tx, 0x65);
 	buffer_write(&buffer_tx, 0x6c);
 	buffer_write(&buffer_tx, 0x6c);
 	buffer_write(&buffer_tx, 0x6f);
-	
-	UDR0 = 0x30;
-	
-    while (1) {
 
-    }
+	// Set UDRIE (enable UDRE)
+	UCSR0B |= (1 << UDRIE);
 }
 
+int main(void) {
+	uint8_t temp;
+
+	init_PORTS();
+	init_USART();
+	sei();
+
+	transmit_Data();
+
+  while (1) {
+
+  }
+}
