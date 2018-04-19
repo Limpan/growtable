@@ -23,7 +23,7 @@ ISR(USART_RX_vect) {
 	if (buffer_isFull(&buffer_rx) == false) {
 		buffer_write(&buffer_rx, data);
 
-		PORTB |= (1<<PB0);
+		transmit_Data(data);
 	}
 /*	uint8_t temp;
 	temp = UDR0;
@@ -64,7 +64,7 @@ ISR(USART_UDRE_vect) {
 		UDR0 = data;
 	} else {
 		// Clear UDRIE (disable UDRE)
-		UCSR0B &= ~(1 << UDRIE);
+		UCSR0B &= ~(1 << UDRIE0);
 	}
 }
 
@@ -113,16 +113,16 @@ void init_PORTS(void) {
 	PORTD = 0b00011111;
 }
 
-void transmit_Data(void) {
+void transmit_Data(uint8_t data) {
 	// Add data to buffer_tx
 	buffer_write(&buffer_tx, 0x48);
 	buffer_write(&buffer_tx, 0x65);
 	buffer_write(&buffer_tx, 0x6c);
-	buffer_write(&buffer_tx, 0x6c);
 	buffer_write(&buffer_tx, 0x6f);
+	buffer_write(&buffer_tx, data);
 
 	// Set UDRIE (enable UDRE)
-	UCSR0B |= (1 << UDRIE);
+	UCSR0B |= (1 << UDRIE0);
 }
 
 int main(void) {
@@ -132,7 +132,7 @@ int main(void) {
 	init_USART();
 	sei();
 
-	transmit_Data();
+	transmit_Data(0x30);
 
   while (1) {
 
