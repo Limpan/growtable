@@ -113,13 +113,38 @@ void init_PORTS(void) {
 	PORTD = 0b00011111;
 }
 
-void transmit_Data(uint8_t data) {
-	// Add data to buffer_tx
-	buffer_write(&buffer_tx, 0x48);
-	buffer_write(&buffer_tx, 0x65);
-	buffer_write(&buffer_tx, 0x6c);
-	buffer_write(&buffer_tx, 0x6f);
-	buffer_write(&buffer_tx, data);
+void init_TIMER0(void) {
+	TCCR0A = (1 << COM0A1) | (1 << COM0B1) | (1 << WGM01) | (1 << WGM00);
+	TCCR0B = (1 << CS01);
+	
+	OCR0A = 32;
+	OCR0B = 128;
+	PORTC |= (1 << 0);
+}
+
+void transmit_Data(uint8_t *data, uint8_t length) {
+	// COBS encode data and add to buffer_tx
+
+	uint8_t *read_ptr = data;
+	uint8_t *scan_ptr = data;
+	uint8_t *scan_end_ptr = data + length;
+	uint8_t cobs_code = 1;
+	uint8_t byte = 0;
+
+	while (read_ptr < scan_end_ptr) {
+		byte = *scan_ptr++;
+		
+		if (byte == 0x00) {
+			buffer_write(&buffer_tx, cobs_code);
+			cobs_code = 1;
+			while (read_ptr <= scan_ptr) {
+				buffer_write(&buffer_tx, *read_ptr++);
+			}
+		}
+		else {
+			cobs_code++;
+		}		
+	}
 
 	// Set UDRIE (enable UDRE)
 	UCSR0B |= (1 << UDRIE0);
@@ -130,11 +155,12 @@ int main(void) {
 
 	init_PORTS();
 	init_USART();
+	init_TIMER0();
 	sei();
 
-	transmit_Data(0x30);
+	uint8_t *hello = {0x58, 0x50, 0x00, 0x48};
+	transmit_Data(&hello, 4);
 
   while (1) {
-
   }
 }
