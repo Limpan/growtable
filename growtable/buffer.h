@@ -8,6 +8,7 @@
  * http://www.fourwalledcubicle.com/files/LightweightRingBuff.h
  */ 
 
+#include <util/atomic.h>
 #include <stdint.h>
 #include <stdbool.h>
 
@@ -21,13 +22,21 @@ typedef struct {
 } buffer_t;
 
 static inline void buffer_initBuffer(buffer_t* const buffer) {
-	buffer->write = buffer->buffer;
-	buffer->read = buffer->buffer;
-	buffer->count = 0;
+	ATOMIC_BLOCK(ATOMIC_RESTORESTATE) {
+		buffer->write = buffer->buffer;
+		buffer->read = buffer->buffer;
+		buffer->count = 0;
+	}
 }
 
 static inline uint8_t buffer_getCount(buffer_t* const buffer) {
-	return buffer->count;
+	uint8_t count;
+	
+	ATOMIC_BLOCK(ATOMIC_RESTORESTATE) {
+		count = buffer->count;
+	}
+
+	return count;
 }
 
 static inline bool buffer_isFull(buffer_t* const buffer) {
@@ -44,7 +53,9 @@ static inline void buffer_write(buffer_t* const buffer, const uint8_t data) {
 	if (++buffer->write == &buffer->buffer[BUFFER_SIZE])
 		buffer->write = buffer->buffer;
 	
-	buffer->count++;
+	ATOMIC_BLOCK(ATOMIC_RESTORESTATE) {
+		buffer->count++;
+	}
 }
 
 static inline uint8_t buffer_read(buffer_t* const buffer) {
@@ -53,11 +64,15 @@ static inline uint8_t buffer_read(buffer_t* const buffer) {
 	if (++buffer->read == &buffer->buffer[BUFFER_SIZE])
 		buffer->read = buffer->buffer;
 	
-	buffer->count--;
-	
+	ATOMIC_BLOCK(ATOMIC_RESTORESTATE) {
+		buffer->count--;
+	}
+
 	return data;
 }
 
 static inline uint8_t buffer_peek(buffer_t* const buffer) {
 	uint8_t data = *buffer->read;
+	
+	return data;
 }

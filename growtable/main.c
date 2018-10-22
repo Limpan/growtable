@@ -17,15 +17,34 @@
 buffer_t volatile buffer_tx;
 buffer_t volatile buffer_rx;
 
+enum STATE_RX {WAITING, DECODE, ERROR};
+	
+uint8_t volatile fan_speed_a = 50;
+uint8_t volatile fan_speed_b = 10;
+
 ISR(USART_RX_vect) {
+	/*
+		Receive data from USART.
+	*/
 	uint8_t data;
 	data = UDR0;
-	if (buffer_isFull(&buffer_rx) == false) {
-		buffer_write(&buffer_rx, data);
 
-		transmit_Data(data);
+	buffer_write(&buffer_rx, data);
+
+	if (data == 0x00) {
+		uint8_t msg[] = {0x50, 0x49, 0x4E, 0x47};
+		transmit_message(&msg, 4);
 	}
-/*	uint8_t temp;
+	
+	if (data == 0x01) {
+		uint8_t msg[] = {0x10, fan_speed_a, fan_speed_b};
+		transmit_message(&msg, 3);
+		
+		PORTB ^= (1<<PB0);
+	}
+
+	/*
+	uint8_t temp;
 	temp = UDR0;
 	if (temp == 'a') {
 		UDR0 = 'x';
@@ -54,11 +73,16 @@ ISR(USART_RX_vect) {
 	else if (temp == 'd') {
 		UDR0 = 'w';
 		PORTC = (1<<PC0);
-	} */
+	} 
+	*/
 }
 
 ISR(USART_UDRE_vect) {
+	/* 
+		Transmit data with USART.
+	*/
 	uint8_t data;
+		
 	if (buffer_getCount(&buffer_tx) > 0) {
 		data = buffer_read(&buffer_tx);
 		UDR0 = data;
@@ -72,8 +96,8 @@ void init_USART(void) {
 	buffer_initBuffer(&buffer_tx);
 	buffer_initBuffer(&buffer_rx);
 
-	UBRR0H = USART_BAUD_PRESCALE >> 8;
-	UBRR0L = USART_BAUD_PRESCALE;
+	UBRR0H = (uint8_t) USART_BAUD_PRESCALE >> 8;
+	UBRR0L = (uint8_t) USART_BAUD_PRESCALE;
 
 	UCSR0B = (1 << TXEN0) | (1 << RXEN0) | (1 << RXCIE0);
 }
@@ -113,42 +137,73 @@ void init_PORTS(void) {
 	PORTD = 0b00011111;
 }
 
+
 void init_TIMER0(void) {
 	TCCR0A = (1 << COM0A1) | (1 << COM0B1) | (1 << WGM01) | (1 << WGM00);
 	TCCR0B = (1 << CS01);
 	
-	OCR0A = 32;
-	OCR0B = 128;
+	OCR0A = fan_speed_a;
+	OCR0B = fan_speed_b;
 	PORTC |= (1 << 0);
 }
 
-void transmit_Data(uint8_t *data, uint8_t length) {
-	// COBS encode data and add to buffer_tx
 
-	uint8_t *read_ptr = data;
-	uint8_t *scan_ptr = data;
-	uint8_t *scan_end_ptr = data + length;
+void transmit_message(uint8_t *msg, uint8_t length) {
+	/*
+		Transmit message.
+	*/
+	uint8_t *read_ptr = msg;
+	uint8_t *scan_ptr = msg;
+	uint8_t *scan_end_ptr = msg + length;
 	uint8_t cobs_code = 1;
-	uint8_t byte = 0;
-
-	while (read_ptr < scan_end_ptr) {
+	uint8_t byte;
+	
+	while (scan_ptr <= scan_end_ptr) {
 		byte = *scan_ptr++;
 		
-		if (byte == 0x00) {
+		if (byte == 0x00 || !(scan_ptr <= scan_end_ptr)) {
 			buffer_write(&buffer_tx, cobs_code);
-			cobs_code = 1;
-			while (read_ptr <= scan_ptr) {
+			while ((read_ptr + 1) < scan_ptr) {
 				buffer_write(&buffer_tx, *read_ptr++);
 			}
+			read_ptr++;
+			cobs_code = 1;
 		}
 		else {
 			cobs_code++;
-		}		
+		}
 	}
+	
+	buffer_write(&buffer_tx, 0x00);
 
 	// Set UDRIE (enable UDRE)
 	UCSR0B |= (1 << UDRIE0);
 }
+
+
+void receive_message(uint8_t *data, uint8_t length) {
+	uint8_t *scan_ptr = data;
+	uint8_t *scan_end_ptr = data + length;
+	uint8_t byte = 0;
+	uint8_t count = *scan_ptr++;
+	
+	while (scan_ptr < scan_end_ptr) {
+		byte = *scan_ptr++;
+
+		if (byte == 0) {
+			return;
+		}
+
+		if (count-- == 1) {
+			count = byte;
+			printf("0x%02x (Received)\n", 0x00);
+		}
+		else {
+			printf("0x%02x (Received)\n", byte);
+		}
+	}
+}
+
 
 int main(void) {
 	uint8_t temp;
@@ -157,10 +212,9 @@ int main(void) {
 	init_USART();
 	init_TIMER0();
 	sei();
+	
+	uint8_t hello[] = {0x47, 0x52, 0x4F, 0x57, 0x2D, 0x32, 0x30, 0x31, 0x38, 0x31, 0x30, 0x32, 0x32, 0x2D, 0x4C, 0x69, 0x6E, 0x75, 0x73, 0x20, 0x54, 0x6F, 0x72, 0x6E, 0x67, 0x72, 0x65, 0x6E};
+	transmit_message(&hello, 28);
 
-	uint8_t *hello = {0x58, 0x50, 0x00, 0x48};
-	transmit_Data(&hello, 4);
-
-  while (1) {
-  }
+	while (1) {}
 }
